@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>わんことおさんぽ 🐕🎮 | わんこはかぞく</title>
+<meta name="description" content="レトロゲーム風！愛犬とお散歩アドベンチャー">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#1a1a2e;font-family:'DotGothic16',monospace;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+#ui{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:10}
+#ui>*{pointer-events:auto}
+.title-screen,.result-screen{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;background:linear-gradient(180deg,#2a1a4e 0%,#1a3a2e 100%)}
+.pixel-title{font-size:32px;color:#ffd700;text-shadow:3px 3px 0 #8b4513,0 0 20px #ffd70060;letter-spacing:4px;text-align:center}
+.pixel-sub{font-size:14px;color:#8cd860;margin-top:8px;text-align:center}
+.start-btn{margin-top:30px;padding:16px 40px;font-size:20px;font-family:'DotGothic16',monospace;
+  background:#e8563a;color:#fff;border:4px solid #fff;cursor:pointer;letter-spacing:2px;
+  animation:blink 1.2s ease-in-out infinite}
+.start-btn:active{transform:scale(0.95);background:#c84020}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.6}}
+.char-select{display:flex;gap:20px;margin-top:24px}
+.char-option{text-align:center;cursor:pointer;padding:12px;border:3px solid transparent;border-radius:8px;transition:all 0.2s}
+.char-option.sel{border-color:#ffd700;background:rgba(255,215,0,0.1)}
+.char-option canvas{image-rendering:pixelated;image-rendering:crisp-edges}
+.char-label{color:#fff;font-size:12px;margin-top:4px}
+.score-hud{position:fixed;top:8px;left:0;right:0;display:flex;justify-content:center;gap:20px;z-index:15;pointer-events:none}
+.hud-item{background:rgba(0,0,0,0.6);border:2px solid #ffd700;border-radius:8px;padding:4px 14px;color:#ffd700;font-size:14px;letter-spacing:1px}
+.ctrl-area{position:fixed;bottom:0;left:0;right:0;height:120px;z-index:15;display:flex;justify-content:space-between;align-items:center;padding:0 20px}
+.ctrl-btn{width:70px;height:70px;border-radius:50%;border:3px solid rgba(255,255,255,0.5);
+  background:rgba(255,255,255,0.12);color:#fff;font-size:24px;display:flex;align-items:center;
+  justify-content:center;cursor:pointer;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.ctrl-btn:active{background:rgba(255,255,255,0.3);transform:scale(0.9)}
+.dpad{display:grid;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px);gap:2px}
+.dpad-btn{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.3);border-radius:6px;
+  color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.dpad-btn:active{background:rgba(255,255,255,0.3)}
+.dpad-center{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1)}
+.msg-box{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.8);border:3px solid #ffd700;border-radius:12px;padding:10px 20px;
+  color:#fff;font-size:14px;text-align:center;z-index:16;max-width:340px;
+  animation:msgIn 0.3s ease-out}
+@keyframes msgIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.result-screen .card{background:rgba(255,255,255,0.08);border:3px solid #ffd700;border-radius:16px;padding:24px;text-align:center;max-width:340px;width:90%}
+.result-screen .score-big{font-size:48px;color:#ffd700;margin:8px 0}
+.result-screen .msg-text{color:#8cd860;font-size:14px;line-height:2;margin:12px 0;white-space:pre-line}
+.sns-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.sns-b{border:none;border-radius:8px;color:#fff;padding:8px;font-size:10px;font-family:'DotGothic16',monospace;cursor:pointer;text-align:center}
+@keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(60vh) rotate(720deg);opacity:0}}
+.confetti{position:fixed;top:-10px;font-size:20px;z-index:25;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// 🐕🎮 わんことおさんぽ — レトロドット絵アドベンチャー
+// ══════════════════════════════════════════════════════════
+const NASU="https://www.nasuhai.co.jp/";
+const CV=document.getElementById("game");
+const CTX=CV.getContext("2d");
+const UI=document.getElementById("ui");
+
+// ── 画面サイズ ──
+let W,H,SCALE;
+function resize(){
+  W=window.innerWidth;H=window.innerHeight;
+  CV.width=W;CV.height=H;
+  SCALE=Math.max(1,Math.floor(Math.min(W,H)/200));
+  CTX.imageSmoothingEnabled=false;
+}
+resize();window.addEventListener("resize",resize);
+
+// ══════════════════════════════════════════════════════════
+// ◆ オリジナルドット絵スプライト生成
+// ══════════════════════════════════════════════════════════
+// 色パレット
+const P={
+  _:"transparent",
+  // キャラ共通
+  S:"#ffdbac",  // 肌
+  H:"#8b5e3c",  // 茶髪
+  Hb:"#e8c840", // 金髪
+  E:"#2a2a2a",  // 目
+  M:"#c44",     // 口
+  // 男の子
+  Bj:"#2255aa", // 青ジャケット
+  Bs:"#fff",    // シャツ
+  Bp:"#334",    // パンツ
+  Bk:"#553322", // 靴
+  // 女の子
+  Gs:"#2255aa", // セーラー
+  Gr:"#cc3344", // リボン
+  Gk:"#223",    // スカート
+  Gw:"#fff",    // 白
+  Gl:"#aa7744", // 靴
+  // 犬（柴犬風）
+  Do:"#e8943a", // オレンジ
+  Dw:"#fff8e0", // 白
+  Dk:"#2a2a2a", // 黒（目鼻）
+  Db:"#c47028", // 濃いオレンジ
+  Dt:"#d08030", // しっぽ
+  // アイテム
+  Bn:"#f5f0e0", // 骨
+  Fr:"#e83838", // フリスビー
+  Fb:"#3838e8",
+  Hr:"#e84040", // ハート
+  Tr:"#4a8c28", // 木
+  Gn:"#5daa3f", // 草
+};
+
+// ドット絵データ（16x16）- 各キャラの静止＋アニメフレーム
+// _=透明, 文字=パレットキー
+const SPRITES = {
+  // ── 男の子（正面静止）16x16 ──
+  boy_stand: [
+    "____HHHHHH__",
+    "___HbHbHbHbH_",
+    "___HbHbHbHbHb",
+    "__HHHHHHHHHH_",
+    "__SSESSSESS__",
+    "__SSSSSMSSS__",
+    "___SSSSSSSS__",
+    "___BjBsBsBj__",
+    "__BjBjBsBjBj_",
+    "__BjBjBjBjBj_",
+    "___BpBpBpBp__",
+    "___BpBpBpBp__",
+    "___BkBk_BkBk_",
+    "___BkBk_BkBk_",
+  ],
+  // ── 男の子（歩き1）──
+  boy_walk1: [
+    "____HHHHHH__",
+    "___HbHbHbHbH_",
+    "___HbHbHbHbHb",
+    "__HHHHHHHHHH_",
+    "__SSESSSESS__",
+    "__SSSSSMSSS__",
+    "___SSSSSSSS__",
+    "___BjBsBsBj__",
+    "__BjBjBsBjBj_",
+    "__BjBjBjBjBj_",
+    "___BpBp_BpBp_",
+    "__BpBp___BpBp",
+    "__BkBk___BkBk",
+    "_BkBk_____BkB",
+  ],
+  // ── 女の子（正面静止）──
+  girl_stand: [
+    "___HHHHHHH__",
+    "__HHHHHHHHH_",
+    "__HHHHHHHHH_",
+    "_HHHHHHHHHH_",
+    "_HSSESSSESSH",
+    "_HSSSSSMSSSH",
+    "__HSSSSSSSH_",
+    "___GrGwGwGr_",
+    "__GsGsGwGsGs",
+    "__GsGsGsGsGs",
+    "___GkGkGkGk_",
+    "___GkGkGkGk_",
+    "____SS_SS___",
+    "___GlGl_GlGl",
+  ],
+  // ── 女の子（歩き1）──
+  girl_walk1: [
+    "___HHHHHHH__",
+    "__HHHHHHHHH_",
+    "__HHHHHHHHH_",
+    "_HHHHHHHHHH_",
+    "_HSSESSSESSH",
+    "_HSSSSSMSSSH",
+    "__HSSSSSSSH_",
+    "___GrGwGwGr_",
+    "__GsGsGwGsGs",
+    "__GsGsGsGsGs",
+    "___GkGkGkGk_",
+    "__GkGk___GkG",
+    "__SS______SS",
+    "_GlGl____GlG",
+  ],
+};
+
+// ── 犬スプライト（16x12 横向き）──
+const DOG_SPRITES = {
+  // 犬（右向き静止）
+  dog_stand: [
+    "____DoDo_____",
+    "___DoDoDo__Dt",
+    "__DoDoDoDooDt",
+    "_DkDoDkDoDoDb",
+    "_DoDoDoDoDo__",
+    "_DwDwDwDwDo__",
+    "__DwDwDwDw___",
+    "__Do_Do_Do___",
+    "__Do_Do______",
+  ],
+  // 犬（右向き走り1）
+  dog_run1: [
+    "____DoDo_____",
+    "___DoDoDo_Dt_",
+    "__DoDoDoDooDt",
+    "_DkDoDkDoDoDb",
+    "_DoDoDoDoDo__",
+    "_DwDwDwDwDo__",
+    "__DwDwDwDw___",
+    "_Do___Do_____",
+    "___Do___Do___",
+  ],
+  // 犬（右向き走り2）
+  dog_run2: [
+    "____DoDo_____",
+    "___DoDoDo__Dt",
+    "__DoDoDoDooDt",
+    "_DkDoDkDoDoDb",
+    "_DoDoDoDoDo__",
+    "_DwDwDwDwDo__",
+    "__DwDwDwDw___",
+    "___Do_Do_____",
+    "__Do___Do____",
+  ],
+  // 犬（お座り）
+  dog_sit: [
+    "____DoDo_____",
+    "___DoDoDo____",
+    "__DoDoDoDooo_",
+    "_DkDoDkDoDo__",
+    "_DoDoDoDoDo__",
+    "_DwDwDwDwDb__",
+    "__DwDwDwDwDb_",
+    "__DoDoDwDwDb_",
+    "__DoDo__DbDb_",
+  ],
+  // 犬（ジャンプ）
+  dog_jump: [
+    "___DoDoDo____",
+    "__DoDoDoDo_Dt",
+    "_DoDoDoDooDtD",
+    "_DkDoDkDoDoDB",
+    "_DoDoDoDoDo__",
+    "_DwDwDwDwDo__",
+    "__DwDwDwDw___",
+    "___Do__Do____",
+    "___Do__Do____",
+  ],
+};
+
+// スプライトをキャンバスに描画する関数
+function renderSprite(spriteData, pixSize) {
+  const rows = spriteData.length;
+  // 各行をパースして最大幅を求める
+  const parsed = spriteData.map(row => {
+    const pixels = [];
+    let i = 0;
+    while (i < row.length) {
+      if (row[i] === '_') { pixels.push('_'); i++; }
+      else {
+        // 2文字のカラーキーを探す
+        let found = false;
+        for (let len = 2; len >= 1; len--) {
+          const key = row.substr(i, len);
+          if (P[key] !== undefined) { pixels.push(key); i += len; found = true; break; }
+        }
+        if (!found) { pixels.push('_'); i++; }
+      }
+    }
+    return pixels;
+  });
+  const maxCols = Math.max(...parsed.map(r => r.length));
+  const c = document.createElement('canvas');
+  c.width = maxCols * pixSize;
+  c.height = rows * pixSize;
+  const ctx = c.getContext('2d');
+  parsed.forEach((row, y) => {
+    row.forEach((key, x) => {
+      if (key !== '_' && P[key] && P[key] !== 'transparent') {
+        ctx.fillStyle = P[key];
+        ctx.fillRect(x * pixSize, y * pixSize, pixSize, pixSize);
+      }
+    });
+  });
+  return c;
+}
+
+// 全スプライトをプリレンダリング
+const PIX = 4; // 1ドット=4px
+const spriteCache = {};
+function initSprites() {
+  Object.entries(SPRITES).forEach(([k, v]) => { spriteCache[k] = renderSprite(v, PIX); });
+  Object.entries(DOG_SPRITES).forEach(([k, v]) => { spriteCache[k] = renderSprite(v, PIX); });
+  // アイテムスプライト
+  spriteCache.bone = renderSprite(["__BnBnBn__","_BnBnBnBnBn","BnBnBnBnBnBn","_BnBnBnBnBn","__BnBnBn__"], PIX);
+  spriteCache.heart = renderSprite(["_Hr_Hr_","HrHrHrHr","HrHrHrHr","_HrHrHr_","__Hr___"], PIX);
+  spriteCache.frisbee = renderSprite(["__FrFrFr__","_FrFbFbFrFr","FrFbFrFbFrFr","_FrFbFbFrFr","__FrFrFr__"], PIX);
+  // 木
+  spriteCache.tree = renderSprite([
+    "__TrTrTr__","_TrTrTrTr_","TrTrTrTrTrTr","TrGnTrTrGnTr","_TrTrTrTr_",
+    "__TrTrTr__","___BkBk___","___BkBk___","___BkBk___","___BkBk___",
+  ], PIX);
+}
+
+// ══════════════════════════════════════════════════════════
+// ◆ ゲームステート
+// ══════════════════════════════════════════════════════════
+let state = "title"; // title|playing|result
+let charType = "boy"; // boy|girl
+let score = 0;
+let bones = 0;
+let hearts = 3;
+let timer = 60;
+let timerStart = 0;
+let combo = 0;
+let maxCombo = 0;
+let frisbeeActive = false;
+let frisbee = { x: 0, y: 0, vx: 0, vy: 0 };
+let dogMood = 100; // 0-100
+let msg = "";
+let msgTimer = 0;
+let frameCount = 0;
+
+// ワールド
+let camX = 0;
+const GROUND_Y_RATIO = 0.65;
+let groundY;
+let player = { x: 100, y: 0, vx: 0, vy: 0, dir: 1, jumping: false, throwing: false, throwTimer: 0 };
+let dog = { x: 50, y: 0, vx: 0, vy: 0, state: "follow", targetX: 0, jumping: false, hasItem: false, itemType: null };
+let items = []; // {type:"bone"|"frisbee_landed", x, y}
+let particles = [];
+let clouds = [];
+let trees = [];
+let grassPatches = [];
+
+// 入力
+let keys = { left: false, right: false, up: false, action: false };
+
+function initWorld() {
+  groundY = H * GROUND_Y_RATIO;
+  player = { x: W * 0.35, y: groundY, vx: 0, vy: 0, dir: 1, jumping: false, throwing: false, throwTimer: 0 };
+  dog = { x: player.x - 60, y: groundY, vx: 0, vy: 0, state: "follow", targetX: 0, jumping: false, hasItem: false, itemType: null };
+  items = [];
+  particles = [];
+  score = 0; bones = 0; hearts = 3; timer = 60; combo = 0; maxCombo = 0;
+  dogMood = 80;
+  frisbeeActive = false;
+  camX = 0;
+  // 雲
+  clouds = Array.from({ length: 8 }, () => ({
+    x: Math.random() * W * 3, y: 20 + Math.random() * (groundY * 0.3),
+    w: 40 + Math.random() * 60, speed: 0.2 + Math.random() * 0.3
+  }));
+  // 木
+  trees = Array.from({ length: 12 }, (_, i) => ({
+    x: 200 + i * (180 + Math.random() * 120), type: Math.floor(Math.random() * 3)
+  }));
+  // 草
+  grassPatches = Array.from({ length: 30 }, () => ({
+    x: Math.random() * W * 4, w: 10 + Math.random() * 20
+  }));
+  // アイテム配置
+  for (let i = 0; i < 20; i++) {
+    items.push({
+      type: "bone", x: 300 + i * (120 + Math.random() * 80),
+      y: groundY - 8 - Math.random() * 40, collected: false
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// ◆ 入力処理
+// ══════════════════════════════════════════════════════════
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+  if (e.key === "ArrowUp" || e.key === "w" || e.key === " ") keys.up = true;
+  if (e.key === "z" || e.key === "Enter") keys.action = true;
+});
+document.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+  if (e.key === "ArrowUp" || e.key === "w" || e.key === " ") keys.up = false;
+  if (e.key === "z" || e.key === "Enter") keys.action = false;
+});
+
+// ══════════════════════════════════════════════════════════
+// ◆ ゲームロジック
+// ══════════════════════════════════════════════════════════
+function throwFrisbee() {
+  if (frisbeeActive || player.throwing) return;
+  player.throwing = true;
+  player.throwTimer = 15;
+  frisbeeActive = true;
+  frisbee = {
+    x: player.x + player.dir * 20,
+    y: player.y - 30,
+    vx: player.dir * 6,
+    vy: -4,
+    landed: false
+  };
+  dog.state = "fetch";
+  dog.hasItem = false;
+  showMsg("いけっ！フリスビー！🥏");
+}
+
+function showMsg(text) { msg = text; msgTimer = 120; }
+
+function spawnParticle(x, y, emoji) {
+  particles.push({ x, y, vx: (Math.random() - 0.5) * 3, vy: -2 - Math.random() * 2, life: 40, emoji });
+}
+
+function update() {
+  if (state !== "playing") return;
+  frameCount++;
+
+  // タイマー
+  const elapsed = (Date.now() - timerStart) / 1000;
+  timer = Math.max(0, 60 - elapsed);
+  if (timer <= 0) { endGame(); return; }
+
+  // プレイヤー移動
+  if (keys.left) { player.vx = -3; player.dir = -1; }
+  else if (keys.right) { player.vx = 3; player.dir = 1; }
+  else { player.vx *= 0.7; }
+  if (keys.up && !player.jumping) {
+    player.vy = -8;
+    player.jumping = true;
+  }
+  if (keys.action) { keys.action = false; throwFrisbee(); }
+
+  player.x += player.vx;
+  player.vy += 0.5; // 重力
+  player.y += player.vy;
+  if (player.y >= groundY) { player.y = groundY; player.vy = 0; player.jumping = false; }
+  if (player.x < 20) player.x = 20;
+
+  if (player.throwTimer > 0) player.throwTimer--;
+  else player.throwing = false;
+
+  // カメラ追従
+  const targetCam = player.x - W * 0.35;
+  camX += (targetCam - camX) * 0.08;
+  if (camX < 0) camX = 0;
+
+  // フリスビー
+  if (frisbeeActive && !frisbee.landed) {
+    frisbee.x += frisbee.vx;
+    frisbee.vy += 0.2;
+    frisbee.y += frisbee.vy;
+    if (frisbee.y >= groundY - 5) {
+      frisbee.y = groundY - 5;
+      frisbee.landed = true;
+      frisbee.vx = 0; frisbee.vy = 0;
+      dog.targetX = frisbee.x;
+    }
+  }
+
+  // 犬AI
+  updateDog();
+
+  // アイテム収集
+  items.forEach(it => {
+    if (it.collected) return;
+    const dx = player.x - it.x, dy = player.y - it.y;
+    if (Math.abs(dx) < 25 && Math.abs(dy) < 25) {
+      it.collected = true;
+      bones++;
+      score += 10 * (1 + Math.floor(combo / 3));
+      combo++;
+      if (combo > maxCombo) maxCombo = combo;
+      spawnParticle(it.x, it.y, "🦴");
+      spawnParticle(it.x, it.y, "✨");
+      if (combo >= 3) showMsg(`${combo}コンボ！🔥`);
+    }
+  });
+
+  // パーティクル
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; });
+  particles = particles.filter(p => p.life > 0);
+
+  // 雲移動
+  clouds.forEach(c => { c.x -= c.speed; if (c.x + c.w < camX - 50) c.x = camX + W + 50; });
+
+  // メッセージ
+  if (msgTimer > 0) msgTimer--;
+
+  // 犬ムード
+  if (frameCount % 60 === 0) {
+    const dist = Math.abs(player.x - dog.x);
+    if (dist < 80) dogMood = Math.min(100, dogMood + 2);
+    else if (dist > 200) dogMood = Math.max(0, dogMood - 1);
+  }
+}
+
+function updateDog() {
+  const spd = 3.5;
+  if (dog.state === "follow") {
+    const targetX = player.x - player.dir * 45;
+    const dx = targetX - dog.x;
+    if (Math.abs(dx) > 10) {
+      dog.vx = Math.sign(dx) * Math.min(spd, Math.abs(dx) * 0.1);
+    } else {
+      dog.vx *= 0.8;
+    }
+    // たまにジャンプ
+    if (Math.random() < 0.005 && !dog.jumping) { dog.vy = -6; dog.jumping = true; }
+  }
+  else if (dog.state === "fetch") {
+    if (frisbee.landed) {
+      const dx = frisbee.x - dog.x;
+      if (Math.abs(dx) > 15) {
+        dog.vx = Math.sign(dx) * spd * 1.3;
+      } else {
+        // キャッチ！
+        dog.hasItem = true;
+        dog.itemType = "frisbee";
+        frisbeeActive = false;
+        dog.state = "return";
+        score += 50;
+        combo++;
+        if (combo > maxCombo) maxCombo = combo;
+        spawnParticle(dog.x, dog.y - 20, "🎉");
+        spawnParticle(dog.x, dog.y - 20, "💕");
+        showMsg("キャッチ！かしこい！！🐕✨");
+        dogMood = Math.min(100, dogMood + 15);
+        // 嬉しくてジャンプ
+        if (!dog.jumping) { dog.vy = -7; dog.jumping = true; }
+      }
+    } else {
+      // フリスビーの着地点を追いかける
+      dog.vx = Math.sign(frisbee.x - dog.x) * spd;
+    }
+  }
+  else if (dog.state === "return") {
+    const dx = player.x - dog.x;
+    if (Math.abs(dx) > 30) {
+      dog.vx = Math.sign(dx) * spd * 1.1;
+    } else {
+      // 持ってきた！
+      dog.hasItem = false;
+      dog.state = "follow";
+      score += 30;
+      spawnParticle(dog.x, dog.y - 20, "❤️");
+      showMsg("持ってきてくれた！いい子！💕");
+      dogMood = Math.min(100, dogMood + 10);
+    }
+  }
+
+  dog.x += dog.vx;
+  dog.vy += 0.5;
+  dog.y += dog.vy;
+  if (dog.y >= groundY) { dog.y = groundY; dog.vy = 0; dog.jumping = false; }
+}
+
+function endGame() {
+  state = "result";
+  renderResult();
+}
+
+// ══════════════════════════════════════════════════════════
+// ◆ 描画
+// ══════════════════════════════════════════════════════════
+function draw() {
+  CTX.clearRect(0, 0, W, H);
+
+  // 空グラデーション
+  const sky = CTX.createLinearGradient(0, 0, 0, groundY);
+  sky.addColorStop(0, "#4a90c8");
+  sky.addColorStop(0.7, "#88c8e8");
+  sky.addColorStop(1, "#b8e8b0");
+  CTX.fillStyle = sky;
+  CTX.fillRect(0, 0, W, groundY + 2);
+
+  // 地面
+  CTX.fillStyle = "#5daa3f";
+  CTX.fillRect(0, groundY, W, H - groundY);
+  CTX.fillStyle = "#4a9030";
+  CTX.fillRect(0, groundY, W, 4);
+
+  // 雲
+  CTX.fillStyle = "rgba(255,255,255,0.7)";
+  clouds.forEach(c => {
+    const sx = c.x - camX * 0.3;
+    if (sx > -c.w && sx < W + c.w) {
+      CTX.beginPath();
+      CTX.arc(sx, c.y, c.w * 0.3, 0, Math.PI * 2);
+      CTX.arc(sx + c.w * 0.25, c.y - 5, c.w * 0.25, 0, Math.PI * 2);
+      CTX.arc(sx + c.w * 0.5, c.y, c.w * 0.2, 0, Math.PI * 2);
+      CTX.fill();
+    }
+  });
+
+  // 木
+  trees.forEach(t => {
+    const sx = t.x - camX;
+    if (sx > -80 && sx < W + 80) {
+      if (spriteCache.tree) CTX.drawImage(spriteCache.tree, sx - 24, groundY - spriteCache.tree.height);
+    }
+  });
+
+  // 草パッチ
+  CTX.fillStyle = "#6dba4f";
+  grassPatches.forEach(g => {
+    const sx = g.x - camX;
+    if (sx > -30 && sx < W + 30) {
+      for (let i = 0; i < g.w; i += 5) {
+        CTX.fillRect(sx + i, groundY - 2 - Math.random() * 4, 2, 4 + Math.random() * 3);
+      }
+    }
+  });
+
+  // アイテム
+  items.forEach(it => {
+    if (it.collected) return;
+    const sx = it.x - camX, sy = it.y;
+    if (sx > -20 && sx < W + 20 && spriteCache.bone) {
+      const bob = Math.sin(frameCount * 0.08 + it.x) * 3;
+      CTX.drawImage(spriteCache.bone, sx - 12, sy - 12 + bob);
+    }
+  });
+
+  // フリスビー
+  if (frisbeeActive) {
+    const sx = frisbee.x - camX;
+    if (spriteCache.frisbee) {
+      CTX.save();
+      CTX.translate(sx, frisbee.y);
+      CTX.rotate(frameCount * 0.2);
+      CTX.drawImage(spriteCache.frisbee, -12, -12);
+      CTX.restore();
+    }
+  }
+
+  // 犬
+  drawDog();
+
+  // プレイヤー
+  drawPlayer();
+
+  // パーティクル
+  CTX.font = "16px sans-serif";
+  CTX.textAlign = "center";
+  particles.forEach(p => {
+    CTX.globalAlpha = p.life / 40;
+    CTX.fillText(p.emoji, p.x - camX, p.y);
+  });
+  CTX.globalAlpha = 1;
+
+  // 地面の影線
+  CTX.fillStyle = "#4a8828";
+  for (let x = -camX % 40; x < W; x += 40) {
+    CTX.fillRect(x, groundY + 6, 20, 2);
+  }
+}
+
+function drawPlayer() {
+  const px = player.x - camX;
+  const walkCycle = Math.abs(player.vx) > 0.5 ? (Math.floor(frameCount / 8) % 2 === 0 ? "stand" : "walk1") : "stand";
+  const key = `${charType}_${walkCycle}`;
+  const sprite = spriteCache[key];
+  if (!sprite) return;
+
+  CTX.save();
+  CTX.translate(px, player.y - sprite.height + 4);
+  if (player.dir < 0) {
+    CTX.scale(-1, 1);
+    CTX.translate(-sprite.width, 0);
+  }
+  CTX.drawImage(sprite, 0, 0);
+  CTX.restore();
+
+  // 影
+  CTX.fillStyle = "rgba(0,0,0,0.15)";
+  CTX.beginPath();
+  CTX.ellipse(px + sprite.width / 2 * player.dir, groundY + 2, 16, 4, 0, 0, Math.PI * 2);
+  CTX.fill();
+}
+
+function drawDog() {
+  const dx = dog.x - camX;
+  const isMoving = Math.abs(dog.vx) > 0.5;
+  const dir = dog.vx >= 0 ? 1 : -1;
+  let key;
+  if (dog.state === "fetch" || dog.state === "return") {
+    key = isMoving ? (Math.floor(frameCount / 6) % 2 === 0 ? "dog_run1" : "dog_run2") : "dog_stand";
+  } else if (dog.jumping) {
+    key = "dog_jump";
+  } else {
+    key = isMoving ? (Math.floor(frameCount / 8) % 2 === 0 ? "dog_run1" : "dog_run2") : "dog_stand";
+  }
+
+  const sprite = spriteCache[key];
+  if (!sprite) return;
+
+  CTX.save();
+  CTX.translate(dx, dog.y - sprite.height + 4);
+  if (dir < 0) {
+    CTX.scale(-1, 1);
+    CTX.translate(-sprite.width, 0);
+  }
+  CTX.drawImage(sprite, 0, 0);
+  CTX.restore();
+
+  // 持ち物表示
+  if (dog.hasItem) {
+    CTX.font = "14px sans-serif";
+    CTX.fillText("🥏", dx, dog.y - sprite.height - 4);
+  }
+
+  // ムードアイコン
+  if (dogMood > 80 && frameCount % 40 < 20) {
+    CTX.font = "12px sans-serif";
+    CTX.fillText("♡", dx + 10, dog.y - sprite.height - 8);
+  }
+
+  // 影
+  CTX.fillStyle = "rgba(0,0,0,0.12)";
+  CTX.beginPath();
+  CTX.ellipse(dx + 10, groundY + 2, 14, 3, 0, 0, Math.PI * 2);
+  CTX.fill();
+}
+
+// ══════════════════════════════════════════════════════════
+// ◆ UI描画
+// ══════════════════════════════════════════════════════════
+function renderHUD() {
+  const heartStr = "❤️".repeat(hearts) + "🖤".repeat(3 - hearts);
+  const moodEmoji = dogMood > 70 ? "😊" : dogMood > 40 ? "😐" : "😢";
+  UI.innerHTML = `
+    <div class="score-hud">
+      <div class="hud-item">⏱ ${Math.ceil(timer)}</div>
+      <div class="hud-item">🦴 ${bones}</div>
+      <div class="hud-item">⭐ ${score}</div>
+      <div class="hud-item">${moodEmoji} ${Math.floor(dogMood)}</div>
+    </div>
+    ${msgTimer > 0 ? `<div class="msg-box">${msg}</div>` : ""}
+    <div class="ctrl-area">
+      <div class="dpad">
+        <div></div><div class="dpad-btn" id="du">▲</div><div></div>
+        <div class="dpad-btn" id="dl">◀</div><div class="dpad-btn dpad-center">●</div><div class="dpad-btn" id="dr">▶</div>
+        <div></div><div class="dpad-btn" id="dd">▼</div><div></div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="ctrl-btn" id="ba" style="background:rgba(232,86,58,0.3);border-color:#e8563a">🥏</div>
+        <div class="ctrl-btn" id="bj" style="background:rgba(93,170,63,0.3);border-color:#5daa3f">⬆</div>
+      </div>
+    </div>`;
+
+  // タッチイベント
+  const bind = (id, keyName) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("pointerdown", e => { e.preventDefault(); keys[keyName] = true; });
+    el.addEventListener("pointerup", e => { keys[keyName] = false; });
+    el.addEventListener("pointerleave", e => { keys[keyName] = false; });
+  };
+  bind("dl", "left"); bind("dr", "right"); bind("du", "up"); bind("dd", "down");
+  const bj = document.getElementById("bj");
+  if (bj) {
+    bj.addEventListener("pointerdown", e => { e.preventDefault(); keys.up = true; });
+    bj.addEventListener("pointerup", () => { keys.up = false; });
+    bj.addEventListener("pointerleave", () => { keys.up = false; });
+  }
+  const ba = document.getElementById("ba");
+  if (ba) {
+    ba.addEventListener("pointerdown", e => { e.preventDefault(); throwFrisbee(); });
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// ◆ タイトル画面
+// ══════════════════════════════════════════════════════════
+function renderTitle() {
+  // キャラプレビューを小さいキャンバスで
+  const boyPrev = spriteCache.boy_stand;
+  const girlPrev = spriteCache.girl_stand;
+  const dogPrev = spriteCache.dog_stand;
+
+  UI.innerHTML = `
+    <div class="title-screen">
+      <div style="font-size:48px;margin-bottom:8px">🐕🎮</div>
+      <div class="pixel-title">わんことおさんぽ</div>
+      <div class="pixel-sub">〜 レトロドット絵アドベンチャー 〜</div>
+      <div style="margin-top:20px;color:#ccc;font-size:12px">キャラクターを選んでね</div>
+      <div class="char-select">
+        <div class="char-option ${charType === 'boy' ? 'sel' : ''}" id="sel-boy">
+          <canvas id="prev-boy" width="${boyPrev?.width || 48}" height="${boyPrev?.height || 56}" style="width:${(boyPrev?.width || 48) * 1.5}px;height:${(boyPrev?.height || 56) * 1.5}px"></canvas>
+          <div class="char-label">おにいちゃん</div>
+        </div>
+        <div class="char-option ${charType === 'girl' ? 'sel' : ''}" id="sel-girl">
+          <canvas id="prev-girl" width="${girlPrev?.width || 48}" height="${girlPrev?.height || 56}" style="width:${(girlPrev?.width || 48) * 1.5}px;height:${(girlPrev?.height || 56) * 1.5}px"></canvas>
+          <div class="char-label">おねえちゃん</div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <canvas id="prev-dog" width="${dogPrev?.width || 52}" height="${dogPrev?.height || 36}" style="width:${(dogPrev?.width || 52) * 2}px;height:${(dogPrev?.height || 36) * 2}px"></canvas>
+      </div>
+      <button class="start-btn" id="start-btn">▶ はじめる</button>
+      <div style="margin-top:16px;color:#888;font-size:11px;line-height:2">
+        ← → 移動 ｜ ↑ ジャンプ ｜ Z フリスビー<br>
+        🦴を集めて 🥏を投げて遊ぼう！
+      </div>
+      <div style="margin-top:12px"><a href="${NASU}" target="_blank" style="font-size:11px;color:#888;text-decoration:none">🏔️ 那須ハイランドパーク →</a></div>
+    </div>`;
+
+  // プレビュー描画
+  setTimeout(() => {
+    const bc = document.getElementById("prev-boy");
+    if (bc && boyPrev) bc.getContext("2d").drawImage(boyPrev, 0, 0);
+    const gc = document.getElementById("prev-girl");
+    if (gc && girlPrev) gc.getContext("2d").drawImage(girlPrev, 0, 0);
+    const dc = document.getElementById("prev-dog");
+    if (dc && dogPrev) dc.getContext("2d").drawImage(dogPrev, 0, 0);
+
+    document.getElementById("sel-boy")?.addEventListener("click", () => { charType = "boy"; renderTitle(); });
+    document.getElementById("sel-girl")?.addEventListener("click", () => { charType = "girl"; renderTitle(); });
+    document.getElementById("start-btn")?.addEventListener("click", startGame);
+  }, 50);
+}
+
+function startGame() {
+  state = "playing";
+  groundY = H * GROUND_Y_RATIO;
+  initWorld();
+  timerStart = Date.now();
+  renderHUD();
+  showMsg("おさんぽスタート！🐕🦴を集めよう！");
+}
+
+// ── 結果画面 ──
+function renderResult() {
+  const nm = "わんこ";
+  const moodEmoji = dogMood > 70 ? "😊" : dogMood > 40 ? "😐" : "😢";
+  const msgs = [
+    "たのしかった！また遊ぼうね🐾",
+    "いっぱい走って楽しかったワン！🦮",
+    "フリスビー楽しいね！もっと投げて！🥏",
+    "おやつの時間…じゃないの？🍖",
+    "あなたと一緒がいちばん幸せ💕",
+  ];
+  const rmsg = msgs[Math.floor(Math.random() * msgs.length)];
+  const rank = score >= 500 ? "S" : score >= 300 ? "A" : score >= 150 ? "B" : "C";
+  const rankColor = { S: "#ffd700", A: "#e8563a", B: "#4ca8c8", C: "#888" }[rank];
+
+  const conf = Array.from({ length: 12 }, () => {
+    const em = ["🎉","✨","🐾","⭐","🦴","💛"][Math.floor(Math.random()*6)];
+    return `<div class="confetti" style="left:${5+Math.random()*90}%;animation:confetti ${2+Math.random()*2}s ease-in ${Math.random()*1.5}s forwards">${em}</div>`;
+  }).join("");
+
+  UI.innerHTML = `${conf}
+    <div class="result-screen">
+      <div class="card">
+        <div style="font-size:42px">🎉</div>
+        <div style="font-size:20px;color:#ffd700;margin:4px 0">おさんぽ終了！</div>
+        <div class="score-big">⭐ ${score}</div>
+        <div style="font-size:48px;color:${rankColor};margin:4px 0">RANK ${rank}</div>
+        <div style="display:flex;justify-content:center;gap:14px;margin:8px 0;color:#ccc;font-size:13px">
+          <span>🦴${bones}</span><span>🔥最大${maxCombo}コンボ</span><span>${moodEmoji}ご機嫌${Math.floor(dogMood)}</span>
+        </div>
+        <div style="background:rgba(255,215,0,0.1);border:2px solid #ffd700;border-radius:12px;padding:12px;margin:12px 0">
+          <div style="font-size:10px;color:#ffd700;margin-bottom:4px">💌 ${nm}からのメッセージ</div>
+          <div class="msg-text">${rmsg}</div>
+        </div>
+        <div style="font-size:12px;color:#ccc;margin-bottom:4px">📢 結果をシェア</div>
+        <div class="sns-row">
+          <button class="sns-b" style="background:#000" onclick="shareR('x')">𝕏</button>
+          <button class="sns-b" style="background:#06C755" onclick="shareR('li')">LINE</button>
+          <button class="sns-b" style="background:#1877f2" onclick="shareR('fb')">FB</button>
+          <button class="sns-b" style="background:linear-gradient(45deg,#f09433,#dc2743)" onclick="shareR('ig')">Insta</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="start-btn" style="flex:1;animation:none;font-size:16px;padding:12px" id="retry">🔄 もう1回</button>
+          <button class="start-btn" style="flex:1;animation:none;font-size:16px;padding:12px;background:#2255aa" id="totop">🏠 トップ</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("retry")?.addEventListener("click", startGame);
+  document.getElementById("totop")?.addEventListener("click", () => { state = "title"; renderTitle(); });
+}
+
+window.shareR = function(p) {
+  const t = `🐕🎮 わんことおさんぽ\nスコア: ${score}点 | ランク${score>=500?"S":score>=300?"A":score>=150?"B":"C"}\n🦴${bones}個 | 🔥最大${maxCombo}コンボ\n\n#わんこはかぞく #わんことおさんぽ #那須ハイランドパーク`;
+  const e=encodeURIComponent(t),u=encodeURIComponent(NASU);
+  if(p==="x")window.open("https://x.com/intent/tweet?text="+e+"&url="+u,"_blank");
+  else if(p==="li")window.open("https://social-plugins.line.me/lineit/share?url="+u+"&text="+e,"_blank");
+  else if(p==="fb")window.open("https://www.facebook.com/sharer/sharer.php?u="+u+"&quote="+e,"_blank");
+  else{try{navigator.clipboard.writeText(t+"\n"+NASU);}catch(x){}alert("コピーしました！");}
+};
+
+// ══════════════════════════════════════════════════════════
+// ◆ メインループ
+// ══════════════════════════════════════════════════════════
+function gameLoop() {
+  if (state === "playing") {
+    update();
+    draw();
+    // HUD更新（毎フレームではなく間引く）
+    if (frameCount % 10 === 0) renderHUD();
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+// ── 初期化 ──
+initSprites();
+renderTitle();
+gameLoop();
+</script>
+</body>
+</html>

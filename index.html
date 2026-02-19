@@ -2,30 +2,32 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>わんことおさんぽ 🐕🎮</title>
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{width:100%;height:100%;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;
-  background:#1a1a2e;font-family:'DotGothic16',monospace}
-#game{width:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;background:#4a90c8}
+html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;
+  -webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%;
+  background:#1a1a2e;font-family:'DotGothic16',monospace;overscroll-behavior:none}
+*,*::before,*::after{touch-action:manipulation}
+#game{width:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;background:#4a90c8;touch-action:none}
 #hud{position:fixed;top:env(safe-area-inset-top,2px);left:0;right:0;display:flex;justify-content:center;gap:6px;padding:2px 6px;z-index:5;pointer-events:none}
 .hi{background:rgba(0,0,0,0.7);border:2px solid #ffd700;border-radius:6px;padding:2px 8px;color:#ffd700;font-size:12px;white-space:nowrap}
-#pad{position:fixed;bottom:0;left:0;right:0;z-index:5;
+#pad{position:fixed;bottom:0;left:0;right:0;z-index:5;touch-action:none;
   padding:8px 16px calc(env(safe-area-inset-bottom,6px) + 6px);
   background:linear-gradient(0deg,rgba(0,0,0,0.85) 0%,rgba(0,0,0,0.5) 80%,transparent);
   display:none;justify-content:space-between;align-items:flex-end}
 .dp{display:grid;grid-template-columns:54px 54px 54px;grid-template-rows:54px 54px 54px;gap:3px}
 .db{width:54px;height:54px;border-radius:12px;background:rgba(255,255,255,0.15);
   border:2px solid rgba(255,255,255,0.4);color:#fff;font-size:24px;
-  display:flex;align-items:center;justify-content:center}
+  display:flex;align-items:center;justify-content:center;touch-action:none}
 .db:active{background:rgba(255,255,255,0.4)}
 .dc{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1)}
 .dp-empty{width:54px;height:54px}
 .abw{display:flex;flex-direction:column;gap:10px;align-items:center}
 .ab{width:72px;height:72px;border-radius:36px;border:3px solid;
-  display:flex;align-items:center;justify-content:center;font-size:30px}
+  display:flex;align-items:center;justify-content:center;font-size:30px;touch-action:none}
 .ab:active{transform:scale(0.9)}
 #aj{background:rgba(93,170,63,0.3);border-color:#5daa3f}
 #af{background:rgba(232,86,58,0.3);border-color:#e8563a}
@@ -78,6 +80,19 @@ html,body{width:100%;height:100%;overflow:hidden;touch-action:none;user-select:n
 <div id="msg"></div>
 <div id="ov"></div>
 <script>
+// ── ズーム完全防止 ──
+document.addEventListener("touchstart",function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});
+document.addEventListener("touchmove",function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});
+document.addEventListener("gesturestart",function(e){e.preventDefault();},{passive:false});
+document.addEventListener("gesturechange",function(e){e.preventDefault();},{passive:false});
+document.addEventListener("gestureend",function(e){e.preventDefault();},{passive:false});
+document.addEventListener("dblclick",function(e){e.preventDefault();});
+// ダブルタップ防止（iOS Safari）
+let lastTap=0;
+document.addEventListener("touchend",function(e){
+  const now=Date.now();if(now-lastTap<300){e.preventDefault();}lastTap=now;
+},{passive:false});
+document.addEventListener("contextmenu",function(e){e.preventDefault();});
 // ══════════════════════════════════════════════════════════
 // 🐕🎮 わんことおさんぽ v2 — スマホ最適化＋ピコピコBGM
 // ══════════════════════════════════════════════════════════
@@ -208,8 +223,32 @@ let fOn=false,fri={x:0,y:0,vx:0,vy:0,ld:false};
 let mt="",mT=0,fc=0,cx=0;
 let pl={x:0,y:0,vx:0,vy:0,dr:1,jp:false};
 let dg={x:0,y:0,vx:0,vy:0,st:"follow",jp:false,has:false};
-let its=[],pt=[],cld=[],tre=[];
+let its=[],pt=[],cld=[],tre=[],signs=[];
 let K={l:false,r:false,u:false};
+
+// ── 看板テキスト（那須ハイランドパーク実在アトラクション＋楽しいメッセージ）──
+const SIGN_POOL=[
+  // 那須ハイランドパーク実在コースター・アトラクション（英字表記）
+  {txt:"F2",sub:"SUPER COASTER",col:"#e8563a",bg:"#fff"},
+  {txt:"CAMEL COASTER",sub:"🐫",col:"#e8963a",bg:"#fff8e0"},
+  {txt:"BIG BAUM",sub:"GIANT RIDE",col:"#2255aa",bg:"#e8f0ff"},
+  {txt:"SHINPI",sub:"DARK RIDE",col:"#6a2c8a",bg:"#f0e0ff"},
+  {txt:"NOVA",sub:"SPACE COASTER",col:"#1a3a6e",bg:"#e0f0ff"},
+  {txt:"RIVER ADVENTURE",sub:"SPLASH!",col:"#2288aa",bg:"#e0fff8"},
+  {txt:"GIGA DRIFT",sub:"GO KART",col:"#c83030",bg:"#ffe8e0"},
+  {txt:"JUNGLE GYM",sub:"KIDS ZONE",col:"#3a8c28",bg:"#e8ffe0"},
+  {txt:"SKY BALLOON",sub:"UP UP!",col:"#4a90c8",bg:"#e8f4ff"},
+  // 楽しいメッセージ看板
+  {txt:"WANKO WA",sub:"KAZOKU ♡",col:"#e8563a",bg:"#ffd900"},
+  {txt:"🐕 WELCOME!",sub:"DOG FRIENDLY PARK",col:"#4a3728",bg:"#ffd900"},
+  {txt:"NASU HIGHLAND",sub:"PARK ★",col:"#2255aa",bg:"#fff"},
+  {txt:"ONE WAN!",sub:"🐾 WOOF! 🐾",col:"#e8563a",bg:"#fff0f0"},
+  {txt:"HAPPY WALK",sub:"WITH YOUR DOG",col:"#5daa3f",bg:"#f0ffe0"},
+  {txt:"おやつ→",sub:"OYATSU TIME",col:"#c47028",bg:"#fff8e0"},
+  {txt:"BEST FRIEND",sub:"= YOUR DOG",col:"#cc3344",bg:"#fff0f5"},
+  {txt:"THIS WAY →",sub:"TO ADVENTURE!",col:"#2255aa",bg:"#e8f0ff"},
+  {txt:"PHOTO SPOT",sub:"📸 SAY CHEESE!",col:"#8b4513",bg:"#ffeedd"},
+];
 
 function initW(){
   pl={x:W*0.3,y:GY,vx:0,vy:0,dr:1,jp:false};
@@ -218,6 +257,14 @@ function initW(){
   cld=Array.from({length:6},()=>({x:Math.random()*W*3,y:10+Math.random()*(GY*0.25),w:30+Math.random()*40,sp:0.15+Math.random()*0.25}));
   tre=Array.from({length:15},(_,i)=>({x:120+i*(130+Math.random()*80)}));
   for(let i=0;i<25;i++)its.push({x:200+i*(90+Math.random()*60),y:GY-6-Math.random()*30,got:false});
+  // 看板をランダム配置（木の間に8〜12枚）
+  const usedSigns=[];const signCount=8+Math.floor(Math.random()*5);
+  signs=[];
+  for(let i=0;i<signCount;i++){
+    let s;do{s=SIGN_POOL[Math.floor(Math.random()*SIGN_POOL.length)];}while(usedSigns.includes(s.txt)&&usedSigns.length<SIGN_POOL.length);
+    usedSigns.push(s.txt);
+    signs.push({...s,x:250+i*(180+Math.random()*120),h:32+Math.random()*14});
+  }
 }
 
 // ── Input ──
@@ -226,18 +273,18 @@ document.addEventListener("keyup",e=>{if(e.key==="ArrowLeft"||e.key==="a")K.l=fa
 
 function bT(id,k){
   const e=document.getElementById(id);if(!e)return;
-  const on=ev=>{ev.preventDefault();K[k]=true;};
-  const off=()=>{K[k]=false;};
-  e.addEventListener("pointerdown",on);e.addEventListener("pointerup",off);
+  const on=ev=>{ev.preventDefault();ev.stopPropagation();K[k]=true;};
+  const off=ev=>{if(ev)ev.preventDefault();K[k]=false;};
+  e.addEventListener("pointerdown",on,{passive:false});e.addEventListener("pointerup",off,{passive:false});
   e.addEventListener("pointerleave",off);e.addEventListener("pointercancel",off);
 }
 function setupCtrl(){
   bT("dl","l");bT("dr","r");bT("du","u");
   const j=document.getElementById("aj");
-  if(j){const on=e=>{e.preventDefault();K.u=true;},off=()=>{K.u=false;};
-    j.addEventListener("pointerdown",on);j.addEventListener("pointerup",off);
+  if(j){const on=e=>{e.preventDefault();e.stopPropagation();K.u=true;},off=e=>{if(e)e.preventDefault();K.u=false;};
+    j.addEventListener("pointerdown",on,{passive:false});j.addEventListener("pointerup",off,{passive:false});
     j.addEventListener("pointerleave",off);j.addEventListener("pointercancel",off);}
-  document.getElementById("af")?.addEventListener("pointerdown",e=>{e.preventDefault();doTh();});
+  document.getElementById("af")?.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();doTh();},{passive:false});
 }
 function showM(t){mt=t;mT=90;MSE.textContent=t;MSE.style.display="block";MSE.style.bottom=(window.innerHeight-GH+8)+"px";}
 function spP(x,y,em){pt.push({x,y,vx:(Math.random()-0.5)*2.5,vy:-1.5-Math.random()*1.5,l:30,em});}
@@ -312,6 +359,47 @@ function draw(){
   cld.forEach(c=>{const sx=c.x-cx*0.3;if(sx>-c.w&&sx<W+c.w){X.beginPath();X.arc(sx,c.y,c.w*0.28,0,Math.PI*2);X.arc(sx+c.w*0.25,c.y-3,c.w*0.22,0,Math.PI*2);X.arc(sx+c.w*0.45,c.y,c.w*0.18,0,Math.PI*2);X.fill();}});
 
   tre.forEach(t=>{const sx=t.x-cx;if(sx>-50&&sx<W+50&&sc.tree)X.drawImage(sc.tree,sx-16,GY-sc.tree.height);});
+
+  // ── 看板描画 ──
+  X.textAlign="center";X.textBaseline="middle";
+  X.font="bold 10px 'DotGothic16',monospace";
+  signs.forEach(s=>{
+    const sx=s.x-cx;
+    if(sx<-80||sx>W+80)return;
+    X.font="bold 10px 'DotGothic16',monospace";
+    const tw1=X.measureText(s.txt).width;
+    X.font="8px 'DotGothic16',monospace";
+    const tw2=s.sub?X.measureText(s.sub).width:0;
+    const bw=Math.max(tw1+20,tw2+16,56);
+    const bh=s.h;
+    const postX=sx,postTop=GY-bh-28;
+    // 支柱
+    X.fillStyle="#8b6914";X.fillRect(postX-2,postTop+bh,4,30);
+    X.fillStyle="#a07818";X.fillRect(postX-1,postTop+bh,2,30);
+    // 看板本体（ピクセルアート風：影→本体→枠）
+    const bx=postX-bw/2,by=postTop;
+    X.fillStyle="rgba(0,0,0,0.15)";X.fillRect(bx+2,by+2,bw,bh); // 影
+    X.fillStyle=s.bg;X.fillRect(bx,by,bw,bh);
+    // 枠（2px ピクセル風）
+    X.fillStyle=s.col;
+    X.fillRect(bx,by,bw,2);X.fillRect(bx,by+bh-2,bw,2); // 上下
+    X.fillRect(bx,by,2,bh);X.fillRect(bx+bw-2,by,2,bh); // 左右
+    // 角飾り
+    X.fillRect(bx+2,by+2,3,3);X.fillRect(bx+bw-5,by+2,3,3);
+    X.fillRect(bx+2,by+bh-5,3,3);X.fillRect(bx+bw-5,by+bh-5,3,3);
+    // テキスト
+    X.fillStyle=s.col;
+    X.font="bold 10px 'DotGothic16',monospace";
+    if(s.sub){
+      X.fillText(s.txt,postX,by+bh*0.38);
+      X.font="8px 'DotGothic16',monospace";
+      X.fillStyle=s.col+"cc";
+      X.fillText(s.sub,postX,by+bh*0.7);
+    }else{
+      X.fillText(s.txt,postX,by+bh*0.5);
+    }
+  });
+  X.textBaseline="alphabetic";
 
   X.fillStyle="#6dba4f";
   for(let x=-cx%22;x<W;x+=22){const h=2+Math.sin(x*0.8)*1.5;X.fillRect(x,GY-h,2,h);}
